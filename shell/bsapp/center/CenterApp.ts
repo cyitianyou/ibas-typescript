@@ -102,8 +102,6 @@ namespace shell {
             }
             /** 当前用户 */
             private currentUser: bo.IUser;
-            /** 权限管理员 */
-            private privilegeManager: UserPrivilegeManager;
             /** 初始化用户相关 */
             private init(): void {
                 if (ibas.objects.isNull(this.currentUser)) {
@@ -121,8 +119,7 @@ namespace shell {
                 let user: string = this.currentUser.code;
                 let platform: string = ibas.enums.toString(ibas.emPlantform, this.plantform);
                 let that: this = this;
-                this.privilegeManager = new UserPrivilegeManager();
-                this.privilegeManager.load({
+                privilegeManager.load({
                     user: user,
                     platform: platform,
                     onError(error: Error): void {
@@ -158,16 +155,17 @@ namespace shell {
                                 // 设置跳过方法
                                 console.isSkip = function (element: ibas.IElement): boolean {
                                     // 没权限，跳过元素
-                                    return !that.privilegeManager.canRun(element);
+                                    return !privilegeManager.canRun(element);
                                 };
                                 // 有效模块控制台
                                 console.addListener(function (): void {
                                     // 显示模块
                                     that.view.showModule(console);
                                     // 模块可用，才加载功能和应用
-                                    if (that.privilegeManager.canRun(console)) {
+                                    if (privilegeManager.canRun(console)) {
                                         // 处理功能
                                         for (let func of console.functions()) {
+                                            // 注册功能事件响应
                                             that.functionMap.set(func.id, func);
                                             that.view.showModuleFunction(console.name, func);
                                             // 如当前模块包含Hash指向的功能,激活
@@ -186,6 +184,11 @@ namespace shell {
                                     // 处理服务
                                     for (let service of console.services()) {
                                         ibas.servicesManager.register(service);
+                                    }
+                                    // 注册元素描述
+                                    ibas.i18n.add(console.id, console.description);
+                                    for (let item of console.elements()) {
+                                        ibas.i18n.add(item.id, item.description);
                                     }
                                 });
                                 // 设置视图显示者
@@ -281,7 +284,7 @@ namespace shell {
             /** 显示视图，可重载并添加权限控制 */
             showView(view: ibas.IView): void {
                 if (view instanceof ibas.View) {
-                    if (!this.privilegeManager.canRun(view.application)) {
+                    if (!privilegeManager.canRun(view.application)) {
                         throw new Error(
                             ibas.i18n.prop("shell_application_not_allowed_run",
                                 ibas.objects.isNull(view.application.description) ? view.application.name : view.application.description));
@@ -316,7 +319,7 @@ namespace shell {
             /** 显示常驻视图 */
             showResidentView(view: ibas.IBarView): void;
         }
-        interface IUserPrivilegeLoader {
+        export interface IUserPrivilegeLoader {
             /** 用户 */
             user: string;
             /** 平台 */
@@ -329,19 +332,18 @@ namespace shell {
             /** 完成 */
             onCompleted(): void;
         }
+        const PROPERTY_USERPRIVILEGES: symbol = Symbol("userPrivileges");
         /** 用户权限管理员 */
-        class UserPrivilegeManager {
-            /** 用户权限 */
-            private userPrivileges: ibas.IList<bo.IUserPrivilege>;
+        export class UserPrivilegeManager {
             /** 判断是否可以运行应用 */
             canRun(element: ibas.IElement): boolean {
                 let run: boolean = true;
-                if (ibas.objects.isNull(this.userPrivileges)) {
+                if (ibas.objects.isNull(this[PROPERTY_USERPRIVILEGES])) {
                     return run;
                 }
                 if (ibas.objects.instanceOf(element, ibas.BOApplication)) {
                     // 应用是业务对象应用，根据应用类型设置权限
-                    for (let item of this.userPrivileges) {
+                    for (let item of this[PROPERTY_USERPRIVILEGES]) {
                         if (item.source !== ibas.emPrivilegeSource.BUSINESS_OBJECT) {
                             continue;
                         }
@@ -365,7 +367,7 @@ namespace shell {
                     }
                 }
                 // 应用设置，覆盖之前设置
-                for (let item of this.userPrivileges) {
+                for (let item of this[PROPERTY_USERPRIVILEGES]) {
                     if (item.source === ibas.emPrivilegeSource.BUSINESS_OBJECT) {
                         continue;
                     }
@@ -383,7 +385,7 @@ namespace shell {
             }
             /** 加载权限 */
             load(loader: IUserPrivilegeLoader): void {
-                if (!ibas.objects.isNull(this.userPrivileges)) {
+                if (!ibas.objects.isNull(this[PROPERTY_USERPRIVILEGES])) {
                     // 已初始化不在处理
                     return;
                 }
@@ -397,7 +399,7 @@ namespace shell {
                             if (opRslt.resultCode !== 0) {
                                 throw new Error(opRslt.message);
                             }
-                            that.userPrivileges = opRslt.resultObjects;
+                            that[PROPERTY_USERPRIVILEGES] = opRslt.resultObjects;
                             if (loader.onCompleted instanceof Function) {
                                 loader.onCompleted();
                             }
@@ -410,6 +412,8 @@ namespace shell {
                 });
             }
         }
+        /** 权限管理员 */
+        export const privilegeManager: UserPrivilegeManager = new UserPrivilegeManager();
         export interface IModuleConsoleLoader {
             /** 用户 */
             user: string;
@@ -428,21 +432,20 @@ namespace shell {
              */
             onCompleted(console: ibas.ModuleConsole): void;
         }
+        const PROPERTY_CONSOLES: symbol = Symbol("consoles");
         export class ModuleConsoleManager {
-            /** 模块控制台 */
-            private consoles: ibas.IList<ibas.IModuleConsole>;
             modules(): ibas.IModule[] {
                 let modules: ibas.IList<ibas.IModule> = new ibas.ArrayList<ibas.IModule>();
-                if (ibas.objects.isNull(this.consoles)) {
+                if (ibas.objects.isNull(this[PROPERTY_CONSOLES])) {
                     return modules;
                 }
-                for (let item of this.consoles) {
+                for (let item of this[PROPERTY_CONSOLES]) {
                     modules.add(item);
                 }
                 return modules;
             }
             load(loader: IModuleConsoleLoader): void {
-                this.consoles = new ibas.ArrayList<ibas.IModuleConsole>();
+                this[PROPERTY_CONSOLES] = new ibas.ArrayList<ibas.IModuleConsole>();
                 let that: this = this;
                 let boRepository: bo.IBORepositoryShell = bo.repository.create();
                 boRepository.fetchUserModules({
@@ -453,7 +456,15 @@ namespace shell {
                             if (opRslt.resultCode !== 0) {
                                 throw new Error(opRslt.message);
                             }
-                            for (let module of opRslt.resultObjects) {
+                            // 去除重复模块
+                            let userModules: ibas.ArrayList<bo.IUserModule> = new ibas.ArrayList<bo.IUserModule>();
+                            for (let item of opRslt.resultObjects) {
+                                if (userModules.firstOrDefault(c => c.id === item.id) !== null) {
+                                    continue;
+                                }
+                                userModules.add(item);
+                            }
+                            for (let module of userModules) {
                                 loader.onStatusMessage(
                                     ibas.emMessageType.INFORMATION,
                                     ibas.i18n.prop("shell_initialize_module", ibas.strings.isEmpty(module.name) ? module.id : module.name)
@@ -541,7 +552,7 @@ namespace shell {
                                                         "repository: register [{0}]'s default address [{1}].", repositoryName, module.repository);
                                                 }
                                             }
-                                            that.consoles.add(console);
+                                            that[PROPERTY_CONSOLES].add(console);
                                             loader.onCompleted(console);
                                         }
                                     } catch (error) {

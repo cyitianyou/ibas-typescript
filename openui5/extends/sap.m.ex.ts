@@ -502,6 +502,8 @@ namespace openui5 {
                 return;
             }
             let boRepEx: BORepsitory = new BORepsitory();
+            boRepEx.cache = true;
+            boRepEx.boCode = boCode;
             boRepEx.boName = boName;
             boRepEx.keyAttribute = boKey;
             boRepEx.textAttribute = boText;
@@ -678,13 +680,19 @@ namespace openui5 {
             this.setProperty("criteria", criteria);
         },
         getChooseType(): ibas.emChooseType {
-            return ibas.emChooseType.SINGLE;
+            if (ibas.objects.isNull(this.getProperty("chooseType"))) {
+                return ibas.emChooseType.SINGLE;
+            }
+            return this.getProperty("chooseType");
+        },
+        setChooseType(value: ibas.emChooseType): void {
+            this.setProperty("chooseType", value);
         },
         _getValueHelpIcon: function (Control: any): void {
-            var that: any = this;
-            var IconPool: any = sap.ui.require("sap/ui/core/IconPool");
+            let that: any = this;
+            let IconPool: any = sap.ui.require("sap/ui/core/IconPool");
             if (!this._oValueHelpIcon) {
-                var sURI: any = IconPool.getIconURI("value-help");
+                let sURI: any = IconPool.getIconURI("value-help");
                 this._oValueHelpIcon = IconPool.createControlByURI({
                     src: sURI,
                     useIconTooltip: false,
@@ -955,6 +963,8 @@ namespace openui5 {
                 return;
             }
             let boRepEx: BORepsitory = new BORepsitory();
+            boRepEx.cache = true;
+            boRepEx.boCode = boCode;
             boRepEx.boName = boName;
             boRepEx.keyAttribute = boKey;
             boRepEx.textAttribute = boText;
@@ -1008,6 +1018,41 @@ namespace openui5 {
             this.setProperty("bindingValue", value);
             if (!ibas.strings.isEmpty(value)) {
                 this.seachBO();
+            }
+        },
+        renderer: {}
+    });
+    /**
+     * 显示数据集描述Text
+     */
+    sap.m.Text.extend("sap.m.ex.DescText", {
+        metadata: {
+            properties: {
+                /** 描述数据集 */
+                descList: { type: "object", group: "Ex" },
+                /** 描述字段,绑定后触发查询对象事件 */
+                bindingValue: { type: "string", group: "Ex" },
+            },
+            events: {}
+        },
+        getDescList(): ibas.ArrayList<ibas.KeyText> {
+            return this.getProperty("descList");
+        },
+        setDescList(value: ibas.ArrayList<ibas.KeyText>): void {
+            this.setProperty("descList", value);
+        },
+        getBindingValue(): string {
+            return this.getProperty("bindingValue");
+        },
+        setBindingValue(value: string): void {
+            this.setProperty("bindingValue", value);
+            let keytextList: ibas.ArrayList<ibas.KeyText> = this.getDescList();
+            if (!ibas.strings.isEmpty(keytextList)) {
+                for (let item of keytextList) {
+                    if (value === item.key) {
+                        this.setText(item.text);
+                    }
+                }
             }
         },
         renderer: {}
@@ -1383,7 +1428,6 @@ namespace openui5 {
         setBindingValue(value: string): void {
             this.setProperty("bindingValue", value);
             this.seriesInput.bindProperty("value", this.getBindingInfo("bindingValue"));
-
         },
         getBindingValue(): string {
             return this.getProperty("bindingValue");
@@ -1403,5 +1447,183 @@ namespace openui5 {
             return this.getProperty("objectCode");
         },
         renderer: {}
+    });
+
+    /**
+     * 智能字段控件
+     */
+    sap.m.FlexBox.extend("sap.m.ex.SmartField", {
+        metadata: {
+            properties: {
+                /** 绑定字段 */
+                bindingValue: { type: "string", group: "Ex" },
+                /** 业务对象类型 */
+                boType: { type: "string", group: "Ex" },
+                /** 自定义字段属性名称 */
+                propertyName: { type: "string", group: "Ex" },
+            },
+            events: {}
+        },
+        loadControl(): void {
+            let that: any = this;
+            let completed: Function = function (boPropertyInformations: ibas.ArrayList<any>): void {
+                if (!ibas.objects.isNull(boPropertyInformations)) {
+                    let property: any = boPropertyInformations.firstOrDefault();
+                    if (!ibas.objects.isNull(property)) {
+                        that.removeAllItems();
+                        if (!ibas.objects.isNull(that.getBindingInfo("bindingValue"))) {
+                            let bingingPath: string = that.getBindingInfo("bindingValue").binding.sPath;
+                            let control: any = openui5.utils.getUserFieldControl(property, bingingPath);
+                            if (!ibas.objects.isNull(control)) {
+                                control.setWidth(that.getWidth());
+                                control.setLayoutData(new sap.m.FlexItemData("", {
+                                    growFactor: 12
+                                }));
+                                that.addItem(control);
+                            }
+                        }
+                    }
+                } else {
+                    that.setVisible(false);
+                }
+            };
+            openui5.utils.getUserFieldInformations(this.getBoType(), completed, this.getPropertyName());
+        },
+        setBoType(value: string): void {
+            this.setProperty("boType", value);
+        },
+        getBoType(): string {
+            return this.getProperty("boType");
+        },
+        setPropertyName(value: string): void {
+            this.setProperty("propertyName", value);
+        },
+        getPropertyName(): string {
+            return this.getProperty("propertyName");
+        },
+        setBindingValue(value: string): void {
+            this.setProperty("bindingValue", value);
+            if (!ibas.objects.isNull(this.getBindingInfo("bindingValue")) && value === null) {
+                this.loadControl();
+            }
+        },
+        getBindingValue(): string {
+            return this.getProperty("bindingValue");
+        },
+        renderer: {}
+    });
+
+    /**
+     * sap.m.ex.Wizard控件
+     */
+    sap.m.Wizard.extend("sap.m.ex.Wizard", {
+        metadata: {
+            properties: {},
+            events: {
+                // 导航跳转时触发事件，step参数为跳转的步骤
+                "toStep": {
+                    parameters: {
+                        items: {
+                            step: sap.m.WizardStep
+                        }
+                    }
+                }
+            }
+        },
+        _handleStepChanged: function (event: any): void {
+            let previousStepIndex: any = ((typeof event === "number") ? event : event.getParameter("current")) - 2;
+            let previousStep: any = this._stepPath[previousStepIndex];
+            let subsequentStep: any = this._getNextStep(previousStep, previousStepIndex);
+            let focusFirstElement: any = sap.ui.Device.system.desktop ? true : false;
+            this.goToStep(subsequentStep, focusFirstElement);
+            // 从标签点击步骤时，event类型为标签的object类型，只有标签点击时触发自定义事件
+            if (typeof event !== "number") {
+                this.fireToStep({ step: subsequentStep });
+            }
+        },
+        renderer: {
+
+        }
+    });
+    /**
+     * sap.m.ex.ChooseIcon控件,选择ui5图标
+     */
+    sap.m.Button.extend("sap.m.ex.ChooseIcon", {
+        init(): void {
+            this.draw();
+        },
+        metadata: {
+            properties: {
+                /** 绑定字段 */
+                bindingValue: { type: "string", group: "Ex" },
+            },
+            events: {}
+        },
+        draw(): void {
+            let that: any = this;
+            let seachValue: string = "";
+            let selectDialog: sap.m.SelectDialog = new sap.m.SelectDialog("", {
+                title: ibas.i18n.prop("sap_m_ex_chooseicon_text"),
+                search: function (oEvent: any): void {
+                    seachValue = oEvent.getParameter("value");
+                    let oFilter: sap.ui.model.Filter = new sap.ui.model.Filter("name", sap.ui.model.FilterOperator.Contains, seachValue);
+                    let oBinding: any = oEvent.getSource().getBinding("items");
+                    if (ibas.objects.isNull(oBinding)) {
+                        return;
+                    }
+                    oBinding.filter([oFilter]);
+                },
+                confirm: function (oEvent: sap.ui.base.Event): void {
+                    let selectedIconName: string = oEvent.getParameter("selectedItem").getTitle();
+                    that.setBindingValue(selectedIconName);
+                },
+            });
+            let listItemTemp: sap.m.StandardListItem = new sap.m.StandardListItem("", {
+                title: {
+                    path: "name"
+                },
+                icon: {
+                    path: "name",
+                    formatter(data: any): any {
+                        return ibas.strings.format("{0}{1}", "sap-icon://", data);
+                    }
+                }
+            });
+            selectDialog.bindAggregation("items", {
+                path: "/",
+                templateShareable: true,
+                template: listItemTemp
+            });
+            let icons: ibas.ArrayList<{name:string}> = that.getIcons();
+            selectDialog.setModel(new sap.ui.model.json.JSONModel(icons));
+            selectDialog.bindObject("/");
+            this.attachPress(async function (oEvent: sap.ui.base.Event): Promise<void> {
+                selectDialog.open(seachValue);
+            });
+        },
+        getIcons(): ibas.ArrayList<any> {
+            let iconArray: Array<string> = sap.ui.core.IconPool.getIconNames(undefined);
+            let icons: ibas.ArrayList<{name:string}>=new ibas.ArrayList<{name:string}>();
+            for (let iconName of iconArray) {
+                icons.add({
+                    name: iconName
+                });
+            }
+            return icons;
+        },
+        setBindingValue(value: string): void {
+            if (ibas.strings.isEmpty(value)) {
+                this.setText(ibas.i18n.prop("sap_m_ex_chooseicon_text"));
+                return;
+            }
+            this.setProperty("bindingValue", value);
+            this.setIcon(ibas.strings.format("{0}{1}", "sap-icon://", value));
+        },
+        getBindingValue(): string {
+            return this.getProperty("bindingValue");
+        },
+        renderer: {
+
+        }
     });
 }

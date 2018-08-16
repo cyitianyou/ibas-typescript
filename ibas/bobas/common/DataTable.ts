@@ -8,6 +8,13 @@
 /// <reference path="./Data.ts" />
 
 namespace ibas {
+    /** 转换参数 */
+    export interface IConvertParam {
+        /** 格式化数据 */
+        format: boolean;
+        /** 使用名称 */
+        nameAs: "name" | "index" | "description";
+    }
     /** 数据表 */
     export class DataTable {
         /** 名称 */
@@ -19,32 +26,65 @@ namespace ibas {
         /** 行 */
         rows: ArrayList<DataTableRow> = new ArrayList<DataTableRow>();
         /** 转为对象 */
-        convert(conversion: boolean): any[];
-        /** 转为对象 */
-        convert(): any[];
-        /** 转为对象 */
-        convert(): any[] {
-            let conversionType: boolean = true;
-            if (arguments.length > 0) {
-                conversionType = arguments[0];
+        convert(param: IConvertParam = undefined): any[] {
+            if (objects.isNull(param)) {
+                param = {
+                    format: true,
+                    nameAs: "name",
+                };
             }
             let datas: any = [];
-            let data: any;
             for (let row of this.rows) {
-                data = {};
-                for (var index: number = 0; index < this.columns.length; index++) {
-                    var col: DataTableColumn = this.columns[index];
-                    if (conversionType) {
+                let data: any = {};
+                for (let index: number = 0; index < this.columns.length; index++) {
+                    let col: DataTableColumn = this.columns[index];
+                    let value: any = row.cells[index];
+                    if (param.format) {
                         // 转换类型
-                        data[col.name] = col.convert(row.cells[index]);
+                        value = col.convert(value);
+                    }
+                    if (param.nameAs === "index") {
+                        data[index.toString()] = value;
+                    } else if (param.nameAs === "description" && !ibas.strings.isEmpty(col.description)) {
+                        data[col.description] = value;
                     } else {
-                        // 不转换类型
-                        data[col.name] = row.cells[index];
+                        data[col.name] = value;
                     }
                 }
                 datas.push(data);
             }
             return datas;
+        }
+        /**
+         * 克隆
+         * @param rows 保留的行索引（未定义为全部）
+         */
+        clone(rows: number[] = undefined): DataTable {
+            let nTable: DataTable = new DataTable();
+            nTable.name = this.name;
+            nTable.description = this.description;
+            for (let item of this.columns) {
+                let nItem: DataTableColumn = new DataTableColumn();
+                nItem.name = item.name;
+                nItem.description = item.description;
+                nItem.dataType = item.dataType;
+                nTable.columns.push(nItem);
+            }
+            if (!(rows instanceof Array)) {
+                rows = [];
+                for (let index: number = 0; index < this.rows.length; index++) {
+                    rows.push(index);
+                }
+            }
+            for (let item of rows) {
+                let row: DataTableRow = this.rows[item];
+                let nRow: DataTableRow = new DataTableRow();
+                for (let cell of row.cells) {
+                    nRow.cells.add(cell);
+                }
+                nTable.rows.push(nRow);
+            }
+            return nTable;
         }
     }
     /** 数据表-列 */

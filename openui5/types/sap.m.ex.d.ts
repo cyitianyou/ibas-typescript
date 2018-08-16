@@ -38,6 +38,7 @@ declare namespace sap {
             }
             export class BOChooseInput extends BOInput {
                 getChooseType(): ibas.emChooseType;
+                setChooseType(value: ibas.emChooseType): void;
                 getCriteria(): ibas.Criteria;
                 setCriteria(value: ibas.Criteria | ibas.Condition[]): void;
             }
@@ -55,6 +56,12 @@ declare namespace sap {
                 setBoText(value: string): void;
                 getRepositoryName(): string;
                 setRepositoryName(value: string): void;
+                setBindingValue(value: string): void;
+                getBindingValue(): string;
+            }
+            export class DescText extends sap.m.Text {
+                getDescList(): ibas.ArrayList<ibas.KeyText>;
+                setDescList(value: ibas.ArrayList<ibas.KeyText>): void;
                 setBindingValue(value: string): void;
                 getBindingValue(): string;
             }
@@ -116,6 +123,26 @@ declare namespace sap {
                 getSeriesValue(): string;
                 setObjectCode(value: string): void;
                 getObjectCode(): string;
+            }
+            export class SmartField extends sap.m.FlexBox {
+                setBoType(value: string): void;
+                getBoType(): string;
+                setPropertyName(value: string): void;
+                getPropertyName(): string;
+                setBindingValue(value: string): void;
+                getBindingValue(): string;
+            }
+            /**
+            * sap.m.ex.Wizard控件
+            */
+            export class Wizard extends sap.m.Wizard {
+            }
+            /**
+             * sap.m.ex.ChooseIcon控件
+             */
+            export class ChooseIcon extends sap.m.Button {
+                setBindingValue(value: string): void;
+                getBindingValue(): string;
             }
         }
     }

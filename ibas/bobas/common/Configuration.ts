@@ -20,18 +20,22 @@ namespace ibas {
     export const CONFIG_ITEM_RUNTIME_VERSION: string = "runtimeVersion";
     /** 配置项目-使用最小库 */
     export const CONFIG_ITEM_USE_MINIMUM_LIBRARY: string = "minLibrary";
+    const PROPERTY_ITEMS: symbol = Symbol("items");
+    const PROPERTY_LISTENER: symbol = Symbol("listener");
     /**
      * 配置
      */
     export class Configuration {
 
-        private items: Map<string, any> = new Map<string, any>();
+        constructor() {
+            this[PROPERTY_ITEMS] = new Map<string, any>();
+        }
         /**
          * 加载配置文件
          */
         load(address: string): void {
             let that: any = this;
-            var JQryAjxSetting: JQueryAjaxSettings = {
+            let JQryAjxSetting: JQueryAjaxSettings = {
                 url: address,
                 type: "GET",
                 contentType: "application/json; charset=utf-8",
@@ -63,7 +67,7 @@ namespace ibas {
          * @param value 值
          */
         set(key: string, value: any): void {
-            this.items.set(key, value);
+            this[PROPERTY_ITEMS].set(key, value);
             // 触发值改变事件
             this.fireConfigurationChanged(key, value);
         }
@@ -104,9 +108,9 @@ namespace ibas {
                 type = arguments[2];
             }
             let value: any;
-            if (this.items.has(key)) {
+            if (this[PROPERTY_ITEMS].has(key)) {
                 // 配置了
-                value = this.items.get(key);
+                value = this[PROPERTY_ITEMS].get(key);
                 if (defalut !== undefined) {
                     // 提供了默认值
                     if (typeof value !== typeof defalut) {
@@ -135,8 +139,8 @@ namespace ibas {
         /** 返回配置项目 */
         all(): IList<KeyValue> {
             let items: IList<KeyValue> = new ArrayList();
-            for (let item of this.items.keys()) {
-                items.add(new KeyValue(item, this.items.get(item)));
+            for (let item of this[PROPERTY_ITEMS].keys()) {
+                items.add(new KeyValue(item, this[PROPERTY_ITEMS].get(item)));
             }
             return items;
         }
@@ -159,7 +163,7 @@ namespace ibas {
         private variableMap: Map<string, string>;
         /** 替换字符串中的配置项，配置项示例：${Company} */
         applyVariables(value: string): string {
-            if (value !== null && value.indexOf("${") >= 0) {
+            if (value !== undefined && value !== null && value.indexOf("${") >= 0) {
                 if (this.variableMap == null) {
                     this.variableMap = new Map<string, string>();
                 }
@@ -168,7 +172,7 @@ namespace ibas {
                 }
                 let reg: RegExp = new RegExp("\\$\\{([\\!a-zA-Z].*?)\\}");
                 let results: RegExpExecArray = reg.exec(value);
-                if (results !== null) {
+                if (results !== undefined && results !== null) {
                     for (let item of results) {
                         if (!item.startsWith("${") || !item.endsWith("}")) {
                             // 正则写不对，麻痹的不搞了
@@ -186,8 +190,6 @@ namespace ibas {
             }
             return value;
         }
-
-        private _listeners: Array<IConfigurationChangedListener>;
         /**
          * 注册监听事件
          * @param listener 监听者
@@ -196,17 +198,17 @@ namespace ibas {
             if (listener === undefined || listener === null) {
                 return;
             }
-            if (this._listeners === undefined || this._listeners === null) {
-                this._listeners = new Array<IConfigurationChangedListener>();
+            if (this[PROPERTY_LISTENER] === undefined || this[PROPERTY_LISTENER] === null) {
+                this[PROPERTY_LISTENER] = new Array<IConfigurationChangedListener>();
             }
-            this._listeners.push(listener);
+            this[PROPERTY_LISTENER].push(listener);
         }
         /** 触发语言改变事件 */
         protected fireConfigurationChanged(name: string, value: any): void {
-            if (this._listeners === undefined || this._listeners === null) {
+            if (this[PROPERTY_LISTENER] === undefined || this[PROPERTY_LISTENER] === null) {
                 return;
             }
-            for (let item of this._listeners) {
+            for (let item of this[PROPERTY_LISTENER]) {
                 item.onConfigurationChanged(name, value);
             }
         }

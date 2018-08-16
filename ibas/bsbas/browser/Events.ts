@@ -15,23 +15,23 @@ namespace ibas {
         id?: string;
         eventType: emBrowserEventType;
         /** 事件被触发 */
-        onEventFired(event: Event):void;
+        onEventFired(event: Event): void;
     }
+    const PROPERTY_LISTENER: symbol = Symbol("listener");
     export class BrowserEventManager {
         /** 集合 */
-        private _listeners: IList<IBrowserEventListener>;
         listeners(): IList<IBrowserEventListener>;
         listeners(type: emBrowserEventType): IList<IBrowserEventListener>;
         listeners(): IList<IBrowserEventListener> {
-            if (objects.isNull(this._listeners)) {
-                this._listeners = new ArrayList<IBrowserEventListener>();
+            if (objects.isNull(this[PROPERTY_LISTENER])) {
+                this[PROPERTY_LISTENER] = new ArrayList<IBrowserEventListener>();
             }
             let type: any = arguments[0];
             if (objects.isNull(type)) {
-                return this._listeners;
+                return this[PROPERTY_LISTENER];
             } else {
                 let result: IList<IBrowserEventListener> = new ArrayList<IBrowserEventListener>();
-                result.add(this._listeners.where((listener: IBrowserEventListener) => {
+                result.add(this[PROPERTY_LISTENER].where((listener: IBrowserEventListener) => {
                     if (listener.eventType === type) {
                         return true;
                     }
@@ -42,12 +42,12 @@ namespace ibas {
         }
         /** 获取 */
         listener(id: string): IBrowserEventListener {
-            let IListener: IBrowserEventListener = this.listeners().firstOrDefault((item) => {
+            let listener: IBrowserEventListener = this.listeners().firstOrDefault((item) => {
                 if (item.id === id) {
                     return true;
                 }
             });
-            return IListener;
+            return listener;
         }
         /** 注册 */
         registerListener(listener: IBrowserEventListener): void {
@@ -185,6 +185,8 @@ namespace ibas {
         UNLOAD,
         VOLUMECHANGE,
         WAITING,
+        /** 自定义事件-扫码,CustomEvent */
+        SCAN
     }
 
     /** 浏览器事件管理员实例 */

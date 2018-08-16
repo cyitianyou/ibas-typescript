@@ -13,6 +13,8 @@
 /// <reference path="./DataDeclaration.ts" />
 
 namespace ibas {
+    const PROPERTY_BOCONVERTER: symbol = Symbol("boConverter");
+    const MSG_SIGN_EXCEPTION: string = "Exception: ";
     /** 数据转换，ibas4java */
     export abstract class DataConverter4j implements IDataConverter {
         /**
@@ -175,6 +177,17 @@ namespace ibas {
                 throw new Error(i18n.prop("sys_unable_to_convert_data", objects.getName(objects.getType(data))));
             }
         }
+        /** 修正消息 */
+        protected fixMessage(message: string): string {
+            if (strings.isEmpty(message)) {
+                return message;
+            }
+            let index: number = message.lastIndexOf(MSG_SIGN_EXCEPTION);
+            if (index > 0) {
+                return message.substring(index + MSG_SIGN_EXCEPTION.length);
+            }
+            return message;
+        }
         /**
          * 解析业务对象数据
          * @param data 目标类型
@@ -193,6 +206,9 @@ namespace ibas {
                 newData.userSign = remote.UserSign;
                 newData.resultCode = remote.ResultCode;
                 newData.message = remote.Message;
+                if (newData.resultCode !== 0) {
+                    newData.message = this.fixMessage(newData.message);
+                }
                 if (remote.ResultObjects instanceof Array) {
                     for (let item of remote.ResultObjects) {
                         newData.resultObjects.add(this.parsing(item, null));
@@ -220,6 +236,9 @@ namespace ibas {
                 newData.time = dates.valueOf(remote.Time);
                 newData.resultCode = remote.ResultCode;
                 newData.message = remote.Message;
+                if (newData.resultCode !== 0) {
+                    newData.message = this.fixMessage(newData.message);
+                }
                 return newData;
             } else if (data.type === ChildCriteria.name) {
                 let remote: ibas4j.IChildCriteria = data;
@@ -359,13 +378,11 @@ namespace ibas {
                 throw new Error(i18n.prop("sys_unable_to_parse_data", objects.isNull(data.type) ? "unknown" : data.type));
             }
         }
-
-        private _boConverter: IBOConverter<IBusinessObject, any>;
         protected get boConverter(): IBOConverter<IBusinessObject, any> {
-            if (objects.isNull(this._boConverter)) {
-                this._boConverter = this.createConverter();
+            if (objects.isNull(this[PROPERTY_BOCONVERTER])) {
+                this[PROPERTY_BOCONVERTER] = this.createConverter();
             }
-            return this._boConverter;
+            return this[PROPERTY_BOCONVERTER];
         }
         /** 创建业务对象转换者 */
         protected abstract createConverter(): IBOConverter<IBusinessObject, any>;
@@ -402,6 +419,7 @@ namespace ibas {
     }
     /** 远程对象，类型属性名称 */
     export const REMOTE_OBJECT_TYPE_PROPERTY_NAME: string = "type";
+    const PROPERTY_PROPERTYMAPS: symbol = Symbol("propertyMaps");
     /** 业务对象的数据转换 */
     export abstract class BOConverter implements IBOConverter<IBusinessObject, any> {
         /** 获取对象类型 */
@@ -412,20 +430,11 @@ namespace ibas {
         private setTypeName(data: any, type: string): void {
             data[REMOTE_OBJECT_TYPE_PROPERTY_NAME] = type;
         }
-
-        private _propertyMaps: PropertyMaps;
-
         private get propertyMaps(): PropertyMaps {
-            if (objects.isNull(this._propertyMaps)) {
-                this._propertyMaps = new PropertyMaps;
-                this._propertyMaps.add(new PropertyMap("_new", "isNew"));
-                this._propertyMaps.add(new PropertyMap("_dirty", "isDirty"));
-                this._propertyMaps.add(new PropertyMap("_deleted", "isDeleted"));
-                this._propertyMaps.add(new PropertyMap("_savable", "isSavable"));
-                this._propertyMaps.add(new PropertyMap("_loading", undefined));// 忽略属性
-                this._propertyMaps.add(new PropertyMap("_listeners", undefined));// 忽略属性
+            if (objects.isNull(this[PROPERTY_PROPERTYMAPS])) {
+                this[PROPERTY_PROPERTYMAPS] = new PropertyMaps;
             }
-            return this._propertyMaps;
+            return this[PROPERTY_PROPERTYMAPS];
         }
         /**
          * 解析远程数据
@@ -491,6 +500,23 @@ namespace ibas {
                         for (let item of sValue) {
                             // 创建子项实例并添加到集合
                             this.parsingProperties(item, target[tName].create());
+                        }
+                        // 已处理，继续下一个
+                        continue;
+                    } else if (tName === "UserFields" && target instanceof BusinessObject) {
+                        // 用户字段
+                        for (let item of sValue) {
+                            let remote: ibas4j.IUserField = item;
+                            let userField: IUserField = target.userFields.register(remote.Name, enums.valueOf(emDbFieldType, remote.ValueType));
+                            if (userField.valueType === emDbFieldType.DATE) {
+                                userField.value = dates.valueOf(remote.Value);
+                            } else if (userField.valueType === emDbFieldType.NUMERIC) {
+                                userField.value = parseInt(remote.Value, 0);
+                            } else if (userField.valueType === emDbFieldType.DECIMAL) {
+                                userField.value = parseFloat(remote.Value);
+                            } else {
+                                userField.value = remote.Value;
+                            }
                         }
                         // 已处理，继续下一个
                         continue;
@@ -621,7 +647,9 @@ namespace ibas {
          * @returns 转换的值
          */
         protected convertData(boName: string, property: string, value: any): any {
-            if (typeof value === "number") {
+            if (boName === UserField.name && property === "ValueType") {
+                return enums.toString(emDbFieldType, value);
+            } else if (typeof value === "number") {
                 // 枚举类型
                 if (property === "DocumentStatus" || property === "LineStatus") {
                     return enums.toString(emDocumentStatus, value);

@@ -33,7 +33,6 @@ namespace ibas {
     export const BO_PROPERTY_NAME_LINESTATUS: string = "lineStatus";
     /** 需要被重置的属性名称 */
     const NEED_BE_RESET_PROPERTIES: string[] = [
-        "_listeners",
         "createDate", "createTime", "updateDate", "updateTime", "logInst", "createUserSign", "updateUserSign", "createActionId", "updateActionId",
         "referenced", "canceled", "deleted", "approvalStatus", "lineStatus", "status", "documentStatus"
     ];
@@ -315,7 +314,33 @@ namespace ibas {
          */
         organization: string;
     }
-
+    /** 业务对象-用户字段 */
+    export interface IBOUserFields {
+        /** 用户字段 */
+        userFields: IUserFields;
+    }
+    /** 用户字段 */
+    export interface IUserField {
+        /** 名称 */
+        name: string;
+        /** 类型 */
+        valueType: emDbFieldType;
+        /** 值 */
+        value: any;
+    }
+    /** 用户字段集合 */
+    export interface IUserFields {
+        /** 获取用户字段 */
+        get(index: number): IUserField;
+        /** 获取用户字段 */
+        get(name: string): IUserField;
+        /** 变量集合 */
+        forEach(): IUserField[];
+        /** 大小 */
+        size(): number;
+        /** 注册 */
+        register(name: string, valueType: emDbFieldType): IUserField;
+    }
 
     /**
      * 业务对象基类
@@ -394,8 +419,19 @@ namespace ibas {
             myRules.execute(this, property);
             super.firePropertyChanged(property);
         }
+        /** 用户字段 */
+        private UserFields: UserFields;
+        get userFields(): IUserFields {
+            if (objects.isNull(this.UserFields)) {
+                this.UserFields = new UserFields(this);
+                this.UserFields.registers();
+            }
+            return this.UserFields;
+        }
     }
-
+    const PROPERTY_LISTENER: symbol = Symbol("listener");
+    const PROPERTY_PARENT: symbol = Symbol("parent");
+    const PROPERTY_RULES: symbol = Symbol("rules");
     /**
      * 业务对象集合基类
      */
@@ -408,7 +444,7 @@ namespace ibas {
          */
         constructor(parent: P) {
             super();
-            this._listener = {
+            this[PROPERTY_LISTENER] = {
                 caller: this,
                 propertyChanged(name: string): void {
                     // this指向业务对象集合基类,arguments[1]指向触发事件的BO
@@ -433,25 +469,16 @@ namespace ibas {
             }
         }
 
-        private _listener: IPropertyChangedListener;
-
-        protected get listener(): IPropertyChangedListener {
-            return this._listener;
-        }
-
-        private _parent: P;
-
         protected get parent(): P {
-            return this._parent;
+            return this[PROPERTY_PARENT];
         }
-
         protected set parent(value: P) {
             if (objects.instanceOf(this.parent, Bindable)) {
-                (<any>this.parent).removeListener(this.listener);
+                (<any>this.parent).removeListener(this[PROPERTY_LISTENER]);
             }
-            this._parent = value;
+            this[PROPERTY_PARENT] = value;
             if (objects.instanceOf(this.parent, Bindable)) {
-                (<any>this.parent).registerListener(this.listener);
+                (<any>this.parent).registerListener(this[PROPERTY_LISTENER]);
             }
         }
         /** 父项属性改变时 */
@@ -532,25 +559,27 @@ namespace ibas {
                 }
                 let objectKey: number = this.parent.getProperty<number>(BO_PROPERTY_NAME_OBJECTKEY);
                 if (objectKey !== undefined) {
-                    item.setProperty(BO_PROPERTY_NAME_DOCENTRY, objectKey);
+                    item.setProperty(BO_PROPERTY_NAME_OBJECTKEY, objectKey);
                 }
                 let code: string = this.parent.getProperty<string>(BO_PROPERTY_NAME_CODE);
                 if (code !== undefined) {
-                    item.setProperty(BO_PROPERTY_NAME_DOCENTRY, code);
+                    item.setProperty(BO_PROPERTY_NAME_CODE, code);
                 }
             }
-            if ((<any>item).lineId !== undefined) {
-                // 存在行编号，为其自动编号
-                let max: number = 1;
+            // 存在行编号，为其自动编号
+            if (objects.instanceOf(item, BODocumentLine)
+                || objects.instanceOf(item, BOMasterDataLine)
+                || objects.instanceOf(item, BOSimpleLine)) {
+                let max: number = 0;
                 for (let tmp of this) {
                     let id: number = tmp.getProperty<number>(BO_PROPERTY_NAME_LINEID);
-                    if (id !== undefined) {
+                    if (!isNaN(id)) {
                         if (id > max) {
                             max = id;
                         }
                     }
                 }
-                item.setProperty(BO_PROPERTY_NAME_LINEID, max);
+                item.setProperty(BO_PROPERTY_NAME_LINEID, max + 1);
             }
             // 处理单据状态
             if (objects.instanceOf(item, BODocumentLine)) {
@@ -560,9 +589,8 @@ namespace ibas {
                     item.setProperty(BO_PROPERTY_NAME_LINESTATUS, this.parent.getProperty(BO_PROPERTY_NAME_LINESTATUS));
                 }
             }
-            let that: this = this;
             if (objects.instanceOf(item, Bindable)) {
-                (<any>item).registerListener(this.listener);
+                (<any>item).registerListener(this[PROPERTY_LISTENER]);
             }
             this.runRules(null);
         }
@@ -572,11 +600,10 @@ namespace ibas {
          */
         protected afterRemove(item: T): void {
             if (objects.instanceOf(item, Bindable)) {
-                (<any>item).removeListener(this.listener);
+                (<any>item).removeListener(this[PROPERTY_LISTENER]);
             }
             this.runRules(null);
         }
-        private myRules: IBusinessRules;
         private runRules(property: string): void {
             if (objects.isNull(this.parent)) {
                 return;
@@ -584,13 +611,13 @@ namespace ibas {
             if (this.parent.isLoading) {
                 return;
             }
-            if (objects.isNull(this.myRules)) {
-                this.myRules = businessRulesManager.getRules(objects.getType(this.parent));
+            if (objects.isNull(this[PROPERTY_RULES])) {
+                this[PROPERTY_RULES] = businessRulesManager.getRules(objects.getType(this.parent));
             }
-            if (objects.isNull(this.myRules)) {
+            if (objects.isNull(this[PROPERTY_RULES])) {
                 return;
             }
-            for (let rule of this.myRules) {
+            for (let rule of this[PROPERTY_RULES]) {
                 if (!(rule instanceof BusinessRuleCollection)) {
                     continue;
                 }
@@ -840,6 +867,133 @@ namespace ibas {
             builder.append("]");
             builder.append("}");
             return builder.toString();
+        }
+    }
+    /** 用户字段 */
+    export class UserField<T> implements IUserField {
+        /** 名称 */
+        Name: string;
+        get name(): string {
+            return this.Name;
+        }
+        set name(value: string) {
+            this.Name = value;
+        }
+        /** 类型 */
+        ValueType: emDbFieldType;
+        get valueType(): emDbFieldType {
+            return this.ValueType;
+        }
+        set valueType(value: emDbFieldType) {
+            this.ValueType = value;
+        }
+        /** 值 */
+        Value: T;
+        get value(): T {
+            return this.Value;
+        }
+        set value(value: T) {
+            this.Value = value;
+        }
+    }
+    class UserFieldInfo {
+        name: string;
+        valueType: emDbFieldType;
+    }
+    class UserFieldManager {
+        userFieldInfos: Map<any, IList<UserFieldInfo>> = new Map<any, IList<UserFieldInfo>>();
+        getInfos(type: any): UserFieldInfo[] {
+            let infos: IList<UserFieldInfo> = this.userFieldInfos.get(type);
+            if (!objects.isNull(infos)) {
+                return infos;
+            }
+            return new ArrayList<UserFieldInfo>();
+        }
+        register(type: any, name: string, valueType: emDbFieldType): UserFieldInfo {
+            let infos: IList<UserFieldInfo> = this.userFieldInfos.get(type);
+            if (objects.isNull(infos)) {
+                infos = new ArrayList<UserFieldInfo>();
+                this.userFieldInfos.set(type, infos);
+            }
+            let info: UserFieldInfo = infos.firstOrDefault(c => c.name === name);
+            if (objects.isNull(info)) {
+                info = new UserFieldInfo();
+                info.name = name;
+                info.valueType = valueType;
+                infos.add(info);
+            }
+            return info;
+        }
+        create(info: UserFieldInfo): IUserField {
+            let userField: IUserField = null;
+            if (info.valueType === emDbFieldType.DATE) {
+                userField = new UserField<Date>();
+            } else if (info.valueType === emDbFieldType.NUMERIC) {
+                userField = new UserField<Number>();
+            } else if (info.valueType === emDbFieldType.DECIMAL) {
+                userField = new UserField<Number>();
+            } else {
+                userField = new UserField<String>();
+            }
+            return userField;
+        }
+    }
+    const userFieldManager: UserFieldManager = new UserFieldManager();
+    /** 用户字段集合 */
+    export class UserFields extends Array<IUserField> implements IUserFields {
+        constructor(bo: IBusinessObject) {
+            super();
+            this[PROPERTY_PARENT] = bo;
+        }
+        /** 注册全部用户字段 */
+        registers(): void {
+            for (let item of userFieldManager.getInfos(objects.getType(this[PROPERTY_PARENT]))) {
+                this.register(item.name, item.valueType);
+            }
+        }
+        /** 注册用户字段 */
+        register(name: string, valueType: emDbFieldType): IUserField {
+            for (let item of this) {
+                if (item.name === name) {
+                    return item;
+                }
+            }
+            let info: UserFieldInfo = userFieldManager.register(objects.getType(this[PROPERTY_PARENT]), name, valueType);
+            let userField: IUserField = userFieldManager.create(info);
+            userField.name = name;
+            userField.valueType = valueType;
+            this.push(userField);
+            return userField;
+        }
+        /** 大小 */
+        size(): number {
+            return this.length;
+        }
+        /** 变量集合 */
+        forEach(): IUserField[] {
+            return this;
+        }
+        /** 获取用户字段 */
+        get(index: number): IUserField;
+        /** 获取用户字段 */
+        get(name: string): IUserField;
+        get(): IUserField {
+            let index: any = arguments[0];
+            let userField: IUserField = null;
+            if (typeof index === "number") {
+                userField = this[index];
+            } else {
+                for (let item of this) {
+                    if (item.name === index) {
+                        userField = item;
+                        break;
+                    }
+                }
+            }
+            if (objects.isNull(userField)) {
+                throw new Error(i18n.prop("sys_not_found_user_field", index));
+            }
+            return userField;
         }
     }
 }

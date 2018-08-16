@@ -75,14 +75,12 @@ namespace ibas {
         data: T;
     }
     /** 业务对象服务的契约 */
-    export interface IBOServiceContract extends IDataServiceContract<IBusinessObject> {
+    export interface IBOServiceContract extends IDataServiceContract<IBusinessObject | IBusinessObject[]> {
         /** 数据转换者 */
         converter?: IDataConverter;
     }
-    /** 业务对象列表服务的契约 */
-    export interface IBOListServiceContract extends IDataServiceContract<IBusinessObject[]> {
-        /** 数据转换者 */
-        converter?: IDataConverter;
+    /** 数据表格服务契约 */
+    export interface IDataTableServiceContract extends IDataServiceContract<DataTable> {
     }
     /** 业务对象连接服务的契约 */
     export interface IBOLinkServiceContract extends IServiceContract {
@@ -251,9 +249,9 @@ namespace ibas {
             super(arguments[0]);
         }
     }
-    /** 业务对象列表服务代理 */
-    export class BOListServiceProxy extends DataServiceProxy<IBOListServiceContract> {
-        constructor(contract: IBOListServiceContract);
+    /** 数据表格服务代理 */
+    export class DataTableServiceProxy extends DataServiceProxy<IDataTableServiceContract> {
+        constructor(contract: IDataTableServiceContract);
         constructor() {
             super(arguments[0]);
         }
@@ -394,7 +392,7 @@ namespace ibas {
                 throw new Error(i18n.prop("sys_invalid_parameter", "caller.proxy"));
             }
             for (let service of this.getServices(caller)) {
-                if (!objects.isNull(caller.category)
+                if (!strings.isEmpty(caller.category)
                     && !(caller.category === service.category
                         || config.applyVariables(caller.category) === config.applyVariables(service.category))) {
                     // 类别不符

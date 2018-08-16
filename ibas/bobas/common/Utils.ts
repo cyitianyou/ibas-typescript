@@ -91,17 +91,30 @@ namespace ibas {
             if (objects.isNull(type)) {
                 return undefined;
             }
+            if (typeof type !== "function") {
+                throw new Error("is not a class.");
+            }
             return type.name;
         }
         /**
          * 获取实例类型
-         * @param 实例 类型
+         * @param 实例
          */
         export function getType(instance: any): any {
             if (objects.isNull(instance)) {
                 return undefined;
             }
+            if (typeof instance !== "object") {
+                throw new Error("is not a object.");
+            }
             return instance.constructor;
+        }
+        /**
+         * 获取实例的类型名称
+         * @param instance 实例
+         */
+        export function getTypeName(instance: any): any {
+            return getName(getType(instance));
         }
         /**
          * 克隆对象
@@ -454,26 +467,26 @@ namespace ibas {
                     }
                     tmps = date.split(spChar);
                     if (!objects.isNull(tmps[0])) {
-                        year = Number.parseInt(tmps[0]);
+                        year = Number.parseInt(tmps[0], 0);
                     }
                     if (!objects.isNull(tmps[1])) {
-                        month = Number.parseInt(tmps[1]);
+                        month = Number.parseInt(tmps[1], 0);
                     }
                     if (!objects.isNull(tmps[2])) {
-                        day = Number.parseInt(tmps[2]);
+                        day = Number.parseInt(tmps[2], 0);
                     }
                 }
                 if (!objects.isNull(time)) {
                     let spChar: string = ":";
                     tmps = time.split(spChar);
                     if (!objects.isNull(tmps[0])) {
-                        hour = Number.parseInt(tmps[0]);
+                        hour = Number.parseInt(tmps[0], 0);
                     }
                     if (!objects.isNull(tmps[1])) {
-                        minute = Number.parseInt(tmps[1]);
+                        minute = Number.parseInt(tmps[1], 0);
                     }
                     if (!objects.isNull(tmps[2])) {
-                        second = Number.parseInt(tmps[2]);
+                        second = Number.parseInt(tmps[2], 0);
                     }
                 }
                 // 月份从0开始
@@ -665,6 +678,36 @@ namespace ibas {
             } else {
                 return value;
             }
+        }
+        /**
+         * 保留小数位
+         * @param value 数
+         * @param scale 小数位（默认配置值）
+         */
+        export function round(value: number, scale?: number): number {
+            if (Math.round(value) !== value) {
+                if (isNaN(scale)) {
+                    scale = config.get(CONFIG_ITEM_DECIMAL_PLACES, 6);
+                }
+                if (Math.pow(0.1, scale) > value) {
+                    return 0;
+                }
+                let sign: number = Math.sign(value);
+                let arr: string[] = ("" + Math.abs(value)).split(".");
+                if (arr.length > 1) {
+                    if (arr[1].length > scale) {
+                        let integ: number = +arr[0] * Math.pow(10, scale);
+                        let dec: number = integ + (+arr[1].slice(0, scale) + Math.pow(10, scale));
+                        let proc: number = +arr[1].slice(scale, scale + 1);
+                        if (proc >= 5) {
+                            dec = dec + 1;
+                        }
+                        dec = sign * (dec - Math.pow(10, scale)) / Math.pow(10, scale);
+                        return dec;
+                    }
+                }
+            }
+            return value;
         }
     }
     /**

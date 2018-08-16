@@ -13,18 +13,17 @@ namespace openui5 {
         export abstract class DataType extends sap.ui.model.SimpleType {
             constructor(settings?: IDataTypeSetting) {
                 super();
-                if (ibas.objects.isNull(settings)) {
-                    return;
-                }
-                this.description = settings.description;
-                if (settings.validate instanceof Function) {
-                    this.validate = settings.validate;
-                }
-                if (settings.formatValue instanceof Function) {
-                    this.formatValue = settings.formatValue;
-                }
-                if (settings.parseValue instanceof Function) {
-                    this.parseValue = settings.parseValue;
+                if (!ibas.objects.isNull(settings)) {
+                    this.description = settings.description;
+                    if (settings.validate instanceof Function) {
+                        this.validate = settings.validate;
+                    }
+                    if (settings.formatValue instanceof Function) {
+                        this.formatValue = settings.formatValue;
+                    }
+                    if (settings.parseValue instanceof Function) {
+                        this.parseValue = settings.parseValue;
+                    }
                 }
             }
             description: string = "";
@@ -66,12 +65,11 @@ namespace openui5 {
              */
             constructor(settings?: IAlphanumericSetting) {
                 super(settings);
-                if (ibas.objects.isNull(settings)) {
-                    return;
+                if (!ibas.objects.isNull(settings)) {
+                    this.notEmpty = settings.notEmpty;
+                    this.maxLength = settings.maxLength;
+                    this.minLength = settings.minLength;
                 }
-                this.notEmpty = settings.notEmpty;
-                this.maxLength = settings.maxLength;
-                this.minLength = settings.minLength;
             }
             notEmpty: boolean = false;
             maxLength: number = null;
@@ -110,11 +108,10 @@ namespace openui5 {
              */
             constructor(settings?: INumericSetting) {
                 super(settings);
-                if (ibas.objects.isNull(settings)) {
-                    return;
+                if (!ibas.objects.isNull(settings)) {
+                    this.minValue = settings.minValue;
+                    this.maxValue = settings.maxValue;
                 }
-                this.minValue = settings.minValue;
-                this.maxValue = settings.maxValue;
             }
             minValue: number = undefined;
             maxValue: number = undefined;
@@ -166,10 +163,9 @@ namespace openui5 {
              */
             constructor(settings?: IDecimalSetting) {
                 super(settings);
-                if (ibas.objects.isNull(settings)) {
-                    return;
+                if (!ibas.objects.isNull(settings)) {
+                    this.decimalPlaces = settings.decimalPlaces;
                 }
-                this.decimalPlaces = settings.decimalPlaces;
                 if (ibas.objects.isNull(this.decimalPlaces)) {
                     this.decimalPlaces = ibas.config.get(ibas.CONFIG_ITEM_DECIMAL_PLACES, 6);
                 }
@@ -184,6 +180,9 @@ namespace openui5 {
                 return oValue.toFixed(this.decimalPlaces);
             }
             parseValue(oValue: any): number {
+                if (ibas.strings.isEmpty(oValue)) {
+                    return undefined;
+                }
                 if (ibas.objects.isNull(this.decimalPlaces)) {
                     return Number.parseFloat(oValue);
                 }
@@ -192,7 +191,7 @@ namespace openui5 {
             }
             validate(oValue: number, managedObject?: sap.ui.base.ManagedObject): ValidateResult {
                 let result: ValidateResult = super.validate(oValue, managedObject);
-                if (isNaN(oValue)) {
+                if (isNaN(oValue) && !ibas.objects.isNull(oValue)) {
                     result.status = false;
                     result.message = ibas.i18n.prop("ui5_data_types_decimal_error");
                     this.fireValidationError(managedObject, result.message);
@@ -223,10 +222,9 @@ namespace openui5 {
              */
             constructor(settings?: IDateTimeSetting) {
                 super(settings);
-                if (ibas.objects.isNull(settings)) {
-                    return;
+                if (!ibas.objects.isNull(settings)) {
+                    this.format = settings.format;
                 }
-                this.format = settings.format;
             }
             format?: string;
             formatValue(oValue: any): Date {
@@ -268,20 +266,23 @@ namespace openui5 {
              */
             constructor(settings?: ITimeSetting) {
                 super(settings);
-                if (ibas.objects.isNull(settings)) {
-                    return;
+                if (!ibas.objects.isNull(settings)) {
+                    this.format = settings.format;
                 }
-                this.format = settings.format;
             }
             format?: string;
-            formatValue(oValue: any): Date {
+            formatValue(oValue: any): any {
                 if (validation.isTime(oValue)) {
                     let time: number = oValue;
                     let hour: number = time / 100;
                     let minute: number = time % 100;
                     let date: Date = new Date();
                     date.setHours(hour, minute, 0, 0);
-                    return date;
+                    if (ibas.strings.isEmpty(this.format)) {
+                        return date;
+                    } else {
+                        return ibas.dates.toString(date, this.format);
+                    }
                 }
                 return oValue;
             }
@@ -404,8 +405,9 @@ namespace openui5 {
              * 百分比类型
              * @param settings 设置
              */
-            constructor(settings?: IDecimalSetting) {
-                super(settings);
+            constructor() {
+                super();
+                this.decimalPlaces = 2;
             }
             formatValue(oValue: any): string {
                 if (ibas.objects.isNull(oValue) || typeof oValue !== "number") {
@@ -944,7 +946,7 @@ namespace openui5 {
             if (typeof value !== "string") { // 必须为string类型
                 return false;
             }
-            let result: any = value.match(/^http:\/\/[A-Za-z0-9]+\.[A-Za-z0-9]+[\/=\?%\-&_~`@[\]\’:+!]*([^<>\"])*$/);
+            let result: any = value.match(/^(http|https):\/\/[A-Za-z0-9]+\.[A-Za-z0-9]+[\/=\?%\-&_~`@[\]\’:+!]*([^<>\"])*$/);
             if (result === null) {
                 return false;
             }
@@ -1067,7 +1069,7 @@ namespace openui5 {
                 return false;
             }
             let time: number = value;
-            let hour: number = time / 100;
+            let hour: number = Math.floor(time / 100);
             let minute: number = time % 100;
             if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
                 return true;
